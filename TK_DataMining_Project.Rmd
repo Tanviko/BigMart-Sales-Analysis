@@ -1,0 +1,287 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+#Importing Libraries
+library(readr)  
+library(plyr)   
+library(dplyr)  
+library(ggplot2)
+library(rpart)
+library(e1071)
+library(rpart.plot)
+library(caret)
+```
+
+```{r}
+library(caret)
+library(Metrics)
+```
+
+```{r}
+#..we are importing the train and test dataset
+BMStrain <- read.csv('BigmartTrain.csv')
+BMStest <- read.csv('BigmartTest.csv')
+str(BMStrain)
+str(BMStest)
+```
+
+```{r}
+hist(BMStrain$Item_MRP)
+
+BMStrain1=BMStrain
+BMStrain1$Item_Identifier <- NULL
+str(Big)
+```
+
+```{r}
+
+#...pre processing data 
+names(BMStrain1[,sapply(BMStrain[-1], is.factor)])
+# converting data to numeric
+BMStrainnew <- BMStrain1
+str(BMStrainnew)
+BMStrainnew[,1:11] <- lapply(BMStrainnew[,1:11], as.numeric)
+
+```
+
+```{r}
+#..summary tells us about the data columns to be pre processed
+summary(BMStrain)
+summary(BMStest)
+```
+
+```{r}
+#..reading the dimensions to check the number of columns
+dim(BMStrain)
+dim(BMStest)
+```
+
+```{r}
+#replacing the missing values with median , so that outlier is taken care of
+BMStest$Item_Outlet_Sales <-1
+Totcomb <- rbind(BMStrain,BMStest)
+Totcomb$Item_Weight[is.na(Totcomb$Item_Weight)] <- median(Totcomb$Item_Weight, na.rm =TRUE)
+table(is.na(Totcomb$Item_Weight))
+```
+
+```{r}
+#...replecing value 0 with median
+Totcomb$Item_Visibility <- ifelse(Totcomb$Item_Visibility ==0,median(Totcomb$Item_Visibility),Totcomb$Item_Visibility)
+
+Totcomb$Item_Fat_Content <- gsub("LF", "lowfat",Totcomb$Item_Fat_Content)
+Totcomb$Item_Fat_Content <- gsub("low fat", "lowfat",Totcomb$Item_Fat_Content)
+Totcomb$Item_Fat_Content <- gsub("Low Fat", "lowfat",Totcomb$Item_Fat_Content)
+Totcomb$Item_Fat_Content <- gsub("reg", "Regular",Totcomb$Item_Fat_Content)
+Totcomb$Item_Fat_Content <- as.factor(Totcomb$Item_Fat_Content)
+summary(Totcomb$Item_Fat_Content)
+levels(Totcomb$Outlet_Size)[1] <-"Other"
+summary (Totcomb$Outlet_Size)
+summary(Totcomb)
+```
+
+```{r}
+cor(BMStrainnew[c( "Item_Weight", "Item_Fat_Content", "Item_Visibility","Item_Type","Item_MRP","Outlet_Identifier","Outlet_Establishment_Year","Outlet_Size","Outlet_Location_Type","Outlet_Type","Item_Outlet_Sales")])
+```
+
+```{r}
+#Parttitioning data as train and test again
+trainnew <-Totcomb[1:nrow(BMStrain),]
+testnew <- Totcomb[-(1:nrow(BMStrain)),]
+
+```
+
+```{r}
+#Train control parameters
+fitControl <- trainControl(method = "cv", number =5)
+cartGrid <- expand.grid(.cp=(1:50)*0.01)
+```
+```{r}
+
+```
+
+```{r}
+Decision_trees <- train(Item_Outlet_Sales ~ ., data = trainnew, method = "rpart",trControl = fitControl, tuneGrid =cartGrid)
+print(Decision_trees)
+```
+
+```{r}
+Wholetree <- rpart(Item_Outlet_Sales ~ ., data = trainnew, control =rpart.control(cp=0.01))
+prp(Wholetree)
+```
+```{r}
+dectree1 <- rpart(Item_Outlet_Sales ~ ., data = trainnew)
+print(dectree1)
+```
+
+```{r}
+dectreeprediction = predict(dectree1,testnew)
+```
+
+```{r}
+library(rpart.plot)
+rpart.plot(dectree1, digits = 3)
+rpart.plot(dectree1, digits = 4, fallen.leaves = TRUE, type = 3, extra = 101)
+```
+
+```{r}
+p.rpart <- predict(dectree1, testnew)
+```
+
+```{r}
+summary(p.rpart)
+summary(testnew$Item_Outlet_Sales)
+cor(p.rpart, testnew$Item_Outlet_Sales)
+```
+
+```{r}
+MAE(p.rpart, testnew$Item_Outlet_Sales)
+```
+
+```{r}
+library(RWeka)
+ m.m5p <- M5P(Item_Outlet_Sales ~ ., data = trainnew)
+```
+
+```{r}
+prediction= predict(m.m5p,testnew)
+summary(m.m5p)
+summary(prediction)
+
+
+```
+
+```{r}
+cor(prediction, testnew$Item_Outlet_Sales)
+MAE(testnew$Item_Outlet_Sales, prediction)
+```
+
+```{r}
+#using the built model for predictions
+predictedmodel <- predict(Wholetree, type ="vector")
+rmse(trainnew$Item_Outlet_Sales,predictedmodel)
+```
+
+```{r}
+#plotting graph of visibility and sales
+ggplot(trainnew, aes(x= Item_Visibility, y = Item_Outlet_Sales)) + geom_point(size =
+2.5, color="green") + xlab("Item Visibility") + ylab("Item Outlet Sales") +
+ggtitle("Item Visibility vs Item Outlet Sales")
+```
+
+```{r}
+ggplot(trainnew, aes(Outlet_Identifier, Item_Outlet_Sales)) + geom_bar(stat =
+"identity", color = "red") +theme(axis.text.x = element_text(angle = 70, vjust =
+0.5, color = "black")) + ggtitle("Outlets vs Total Sales") + theme_bw()
+```
+
+```{r}
+ggplot(trainnew, aes(Item_Type, Item_Outlet_Sales)) + geom_bar( stat = "identity",color="navy") + theme(axis.text.x =element_text(angle = 70, vjust = 0.5, color = "purple")) +
+xlab("Item Type") + ylab("Item Outlet Sales")+ggtitle("Item Type vs Sales")
+```
+
+```{r}
+ggplot(trainnew, aes(Outlet_Location_Type, Item_Outlet_Sales)) + geom_bar(stat =
+"identity", color = "black") +theme(axis.text.x = element_text(angle = 30, vjust =
+0.5, color = "black")) + ggtitle("Outlet Location vs Total Sales") + theme_bw()
+```
+
+```{r}
+ggplot(trainnew, aes(Item_Fat_Content, Item_Outlet_Sales)) + geom_bar(stat =
+"identity", color = "black") +theme(axis.text.x = element_text(angle = 30, vjust =
+0.5, color = "black")) + ggtitle("Item_Fat_Content vs Total Sales") + theme_bw()
+```
+
+```{r}
+ggplot(trainnew, aes(Item_Type, Outlet_Location_Type)) + geom_bar(stat =
+"identity", color = "black") +theme(axis.text.x = element_text(angle = 100, vjust =
+2.5, color = "black")) + ggtitle("Outlet Location vs Total Sales") + theme_bw()
+```
+
+```{r}
+
+ggplot(trainnew, aes(Outlet_Establishment_Year, Item_Outlet_Sales)) + geom_bar(stat =
+"identity", color = "pink")  + ggtitle("Year vs Total Sales") + theme_bw()
+```
+
+```{r}
+#regression model
+RegModel <- lm(Item_Outlet_Sales ~ ., data =trainnew)
+
+summary(RegModel)
+```
+
+```{r}
+ins_Predicted <- predict(RegModel, testnew)
+summary(ins_Predicted)
+```
+
+```{r}
+RMSE(trainnew$Item_Outlet_Sales,RegModel$fitted.values)
+```
+
+```{r}
+#..improved regression model using log function
+Regmodellog <- lm(log(Item_Outlet_Sales) ~ ., data =trainnew)
+summary(Regmodellog)
+ins_Predictednew <- predict(Regmodellog, testnew[-12])
+summary(ins_Predictednew)
+RMSE(trainnew$Item_Outlet_Sales,Regmodellog$fitted.values)
+```
+
+```{r}
+RMSE(trainnew$Item_Outlet_Sales,exp(Regmodellog$fitted.values))
+```
+
+```{r}
+library(dummies)
+
+Totcomb <- dummy.data.frame(Totcomb, names = c('Outlet_Size','Outlet_Location_Type'
+                                            ,'Outlet_Type','Item_Identifier_Str2'),sep = '_')
+glimpse(Totcomb)
+```
+
+```{r}
+
+new_combi <- select(Totcomb, -c(Item_Identifier, Outlet_Identifier, Item_Fat_Content,Outlet_Establishment_Year, Item_Type))
+
+str(new_combi)
+```
+
+```{r}
+pred_train <- new_combi %>% 
+  filter(Item_Outlet_Sales != -999)
+
+pred_test <- new_combi %>% 
+  filter(Item_Outlet_Sales == -999)
+```
+
+```{r}
+library("corrplot")
+library(RColorBrewer)
+
+M<-cor(pred_train)
+
+
+corrplot(M, diag = FALSE, order = "FPC",
+         tl.pos = "td", tl.cex = 0.5, method = "circle",type="upper")
+```
+
+```{r}
+summary(RegModel)$coefficients[,4] < 0.05
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
